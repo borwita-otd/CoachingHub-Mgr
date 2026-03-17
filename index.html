@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coaching Hub : Leadership Training </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        .session-modal { animation: fadeIn 0.3s ease-in-out, slideIn 0.3s ease-in-out; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideIn { from { transform: translateY(-10px); } to { transform: translateY(0); } }
+        @keyframes shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); } }
+        
+        #loading-overlay { transition: opacity 0.3s ease-in-out; }
+        .confirm-modal, .session-modal {
+            position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px); display: flex; justify-content: center;
+            align-items: center; z-index: 100;
+        }
+        .modal-content {
+            background: white; padding: 2rem; border-radius: 0.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); text-align: center;
+            max-width: 90%; width: 400px;
+        }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day {
+            position: relative; display: flex; justify-content: center; align-items: center;
+            height: 36px; border-radius: 9999px; cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .calendar-day.header { font-weight: 600; color: #475569; cursor: default; }
+        .calendar-day.other-month { color: #cbd5e1; cursor: default; }
+        .calendar-day.available { background-color: #dcfce7; color: #166534; font-weight: 600; }
+        .calendar-day.available:hover { background-color: #bbf7d0; }
+        .calendar-day.selected { background-color: #2563eb; color: white; font-weight: 700; }
+        .calendar-day.selectable:not(.other-month):hover { background-color: #f1f5f9; }
+        .calendar-day.today { border: 2px solid #3b82f6; }
+        .progress-bar-container {
+            width: 100%; background-color: #e2e8f0; border-radius: 9999px; overflow: hidden;
+        }
+        .progress-bar {
+            height: 10px; background-color: #4ade80; transition: width 0.5s ease-in-out;
+        }
+        .progress-detail-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .progress-detail-container.open {
+            max-height: 2000px;
+            transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .auth-pending #app-container { visibility: hidden; }
+        .error-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        .calendar-day.has-session {
+            background-color: #dbeafe;
+            color: #1e40af;
+            font-weight: bold;
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: #3b82f6;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-slate-800 auth-pending">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm flex justify-center items-center z-50">
+        <div class="text-center">
+            <span class="loader text-blue-600"></span>
+            <p id="loading-text" class="mt-4 text-lg font-semibold text-slate-700">Menghubungkan ke Database...</p>
+        </div>
+    </div>
+
+    <!-- Login Block Overlay (Initially visible) -->
+    <div id="login-overlay-block" class="fixed inset-0 bg-white z-40"></div>
+
+    <!-- Entry Header -->
+    <div id="entry-header" class="fixed top-0 left-0 right-0 bg-white shadow-md z-50 transition-transform -translate-y-full">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <form id="entry-form" class="flex items-center gap-4">
+                <div class="flex-grow">
+                    <label for="entry-password" class="sr-only">Password</label>
+                    <input type="password" id="entry-password" name="password" required class="block w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan Password (NIK Peserta / NIK Coach / Pass Admin)">
+                </div>
+                <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Masuk</button>
+            </form>
+             <p id="entry-error" class="text-red-500 text-sm text-center mt-2 hidden">Password tidak ditemukan.</p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container">
+        <!-- Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-30">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                         <h1 class="flex flex-col md:flex-row md:items-center md:gap-3 font-extrabold text-slate-900 tracking-tight">
+                            <!-- Logo -->
+                            <img src="logo.png" alt="Logo" 
+                                class="w-12 h-7 md:w-[70px] md:h-[35px] object-contain mb-1 md:mb-0">
+
+                            <!-- Teks + Badge -->
+                            <span class="text-lg sm:text-2xl md:text-3xl flex flex-col md:flex-row md:items-center">
+                                <!-- Baris 1 -->
+                                <span>Coaching Hub:</span>
+                                <!-- Baris 2 (di HP block, di laptop inline) -->
+                                <span class="block md:inline md:ml-2">Leadership Training</span>
+
+                                <!-- Badge hanya tampil di laptop -->
+                                <span class="hidden md:inline ml-2 text-[10px] sm:text-xs md:text-sm font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                                    Go Live
+                                </span>
+                            </span>
+                        </h1>
+                        <p id="welcome-message" class="mt-1 text-sm sm:text-base text-slate-600">Selamat datang!</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                          <div id="status-indicator" class="text-right flex-shrink-0">
+                               <p class="font-semibold text-green-600 text-sm">● Terhubung</p>
+                               <p class="text-xs text-slate-500 hidden sm:block">Data tersimpan otomatis</p>
+                          </div>
+                        <button id="logout-btn" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-lg font-semibold hover:bg-slate-300 transition-colors hidden">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12">
+            <!-- Peserta View -->
+            <div id="peserta-view" class="view">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 space-y-8">
+                        <section id="peserta-jadwal" class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                             <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-6 flex items-center"><span class="text-2xl mr-3">🗓️</span>Jadwal Sesi Anda</h2>
+                             <div id="peserta-jadwal-list" class="space-y-4"></div>
+                        </section>
+                        <section id="peserta-progress" class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                             <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-6 flex items-center"><span class="text-2xl mr-3">📈</span>Laporan & Progress Individu</h2>
+                             <div id="peserta-progress-list" class="space-y-6"></div>
+                        </section>
+                    </div>
+                    <div class="space-y-8">
+                        <section class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                            <h3 class="text-lg font-semibold text-slate-800 mb-1">Coach Anda</h3>
+                            <p id="peserta-coach-name" class="text-xl font-bold text-purple-600"></p>
+                        </section>
+                        <section class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                             <h3 class="text-lg font-semibold text-slate-800 mb-3">Ajukan Jadwal Baru</h3>
+                             <p class="text-sm text-slate-500 mb-4">Pilih tanggal yang tersedia (hijau) & isi detail agenda.</p>
+                             <form id="peserta-propose-form" class="space-y-4">
+                                 <input type="hidden" id="peserta-propose-date">
+                                 <div id="peserta-availability-calendar"></div>
+                                 <div id="selected-date-display" class="text-center font-semibold text-blue-600 mt-2 h-6"></div>
+                                 <div>
+                                     <label for="peserta-propose-agenda" class="block text-sm font-medium text-slate-700">Agenda</label>
+                                     <select id="peserta-propose-agenda" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm">
+                                         <option value="Coaching STAR">Coaching STAR</option>
+                                         <option value="Lainnya">Lainnya</option>
+                                     </select>
+                                     <input type="text" id="peserta-propose-agenda-lainnya" placeholder="Masukkan Nama Agenda" class="mt-2 hidden w-full p-2 border border-slate-300 rounded-md shadow-sm">
+                                     <p id="session-number-display" class="text-xs text-slate-500 mt-1 h-4"></p>
+                                 </div>
+                                 <div><label for="peserta-propose-topic" class="block text-sm font-medium text-slate-700">Topik (Opsional)</label><input type="text" id="peserta-propose-topic" placeholder="Contoh: Diskusi Project X" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                                 <div>
+                                     <label for="peserta-propose-media" class="block text-sm font-medium text-slate-700">Media</label>
+                                     <select id="peserta-propose-media" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm">
+                                         <option value="Online">Online</option>
+                                         <option value="Offline">Offline</option>
+                                     </select>
+                                 </div>
+                                 <div id="location-input-container" class="hidden"><label for="peserta-propose-location" class="block text-sm font-medium text-slate-700">Lokasi</label><input type="text" id="peserta-propose-location" placeholder="Contoh: Ruang Meeting Lt. 5" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                                 <div id="link-input-container"><label for="peserta-propose-link" class="block text-sm font-medium text-slate-700">Link Meeting</label><input type="url" id="peserta-propose-link" placeholder="https://meet.google.com/..." class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                                 <button type="submit" class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors">Ajukan Jadwal</button>
+                             </form>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coach View -->
+            <div id="coach-view" class="view">
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                       <div class="lg:col-span-2 space-y-8">
+                             <section id="coach-dashboard" class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                                  <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-4 flex items-center">Dashboard Peserta Anda</h2>
+                                  <div id="coach-participant-list" class="space-y-4 overflow-x-auto"></div>
+                             </section>
+                             <section id="coach-jadwal" class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                                  <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-6 flex items-center">Jadwal & Review Sesi</h2>
+                                  <p class="text-sm text-slate-500 mb-4 -mt-4">Agenda yang sedang berlangsung atau butuh persetujuan.</p>
+                                  <div id="coach-jadwal-list" class="space-y-4"></div>
+                             </section>
+                       </div>
+                       <div class="space-y-8">
+                             <section class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                                  <h3 class="text-lg font-semibold text-slate-800 mb-3">Atur Ketersediaan Anda</h3>
+                                  <p class="text-sm text-slate-500 mb-4">Klik pada tanggal untuk menandai ketersediaan Anda. Klik "Simpan" untuk mengkonfirmasi.</p>
+                                  <div id="coach-availability-calendar"></div>
+                                  <div class="mt-4">
+                                      <button id="save-availability-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Simpan Ketersediaan</button>
+                                      <p id="availability-saved-msg" class="text-green-600 text-sm text-center mt-2 hidden">Perubahan disimpan!</p>
+                                  </div>
+                             </section>
+                       </div>
+                 </div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="admin-view" class="view">
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-6">Dashboard Rekapitulasi</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- Stat Cards -->
+                    <div class="bg-white p-6 rounded-xl shadow-md text-center">
+                        <h3 class="text-slate-500 font-semibold">Total Peserta</h3>
+                        <p id="stat-total-peserta" class="text-4xl font-bold text-blue-600 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md text-center">
+                        <h3 class="text-slate-500 font-semibold">Total Coach</h3>
+                        <p id="stat-total-coach" class="text-4xl font-bold text-purple-600 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md text-center">
+                        <h3 class="text-slate-500 font-semibold">Sesi Selesai</h3>
+                        <p id="stat-sesi-selesai" class="text-4xl font-bold text-green-600 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md text-center">
+                        <h3 class="text-slate-500 font-semibold">Sesi Menunggu</h3>
+                        <p id="stat-sesi-menunggu" class="text-4xl font-bold text-amber-600 mt-2">0</p>
+                    </div>
+                </div>
+                <section class="bg-white p-6 rounded-xl shadow-md mb-8">
+                    <h2 class="text-xl font-bold text-slate-900">Upcoming Session:</h2>
+                    <div id="admin-upcoming-calendar" class="mt-4"></div>
+                </section>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                        <h2 class="text-xl font-bold text-slate-900">Progress Seluruh Peserta</h2>
+                        <button id="export-data-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center gap-2 text-sm w-full sm:w-auto">
+                            <span class="text-lg">📥</span>
+                            <span>Download Rekap</span>
+                        </button>
+                    </div>
+                    <div id="admin-participant-list" class="space-y-8"></div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center py-6 text-sm text-slate-500">
+             <p>&copy; 2026 Borwita Coaching Hub by Rho. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <div id="calendar-tooltip" class="hidden absolute z-[110] bg-slate-800 text-white text-sm rounded-lg shadow-lg p-3 w-max transition-opacity duration-200"></div>
+
+    <!-- Modals -->
+    <div id="session-note-modal" class="session-modal hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl m-4 max-h-[90vh] flex flex-col">
+            <div class="p-4 sm:p-6 border-b"><h3 id="session-note-modal-title" class="text-lg sm:text-xl font-bold text-slate-900">Catatan Pelaksanaan Sesi</h3><p id="session-note-modal-info" class="text-sm text-slate-500 mt-1"></p></div>
+            <form id="session-note-form" class="p-4 sm:p-6 space-y-6 overflow-y-auto">
+                <input type="hidden" id="note-log-id">
+                <input type="hidden" id="note-session-id">
+                
+                <!-- CARE Form Sections -->
+                <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">C - CLARITY (Sasaran spesifik yang ingin dicapai oleh Coachee)</h4>
+                    <div><label for="form-clarity-agenda" class="block text-sm font-medium text-slate-700">Session's Agenda:<br><span class="text-xs text-slate-500 italic">(Topik spesifik sesi ini)</span></label><textarea id="form-clarity-agenda" rows="2" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                    <div><label for="form-clarity-outcome" class="block text-sm font-medium text-slate-700">Desired Outcome:<br><span class="text-xs text-slate-500 italic">Apa yang Ingin dicapai dalam sesi coaching (Tuliskan Outcome dengan S.M.A.R.T)</span></label><textarea id="form-clarity-outcome" rows="2" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">A - AWAKENING (Menggali kesadaran Coachee)</h4>
+                    <div><label for="form-awakening-notes" class="block text-sm font-medium text-slate-700">Exploration Notes:<br><span class="text-xs text-slate-500 italic">Mengapa outcome yang ingin dicapai itu penting</span></label><textarea id="form-awakening-notes" rows="3" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                    <div><label for="form-awakening-takeaways" class="block text-sm font-medium text-slate-700">Key Takeaways:<br><span class="text-xs text-slate-500 italic">Insight baru yang diperoleh</span></label><textarea id="form-awakening-takeaways" rows="3" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">R - RESOLUTION (Resolusi & Keputusan)</h4>
+                    <div><label for="form-resolution-resolution" class="block text-sm font-medium text-slate-700">The Resolution:<br><span class="text-xs text-slate-500 italic">bagaimana cara anda bisa mendapaikan outcome tersebut (Tuliskan solusi/strategi anda)</span></label><textarea id="form-resolution-resolution" rows="3" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">E - EMPOWERMENT (Pemberdayaan & Determinasi)</h4>
+                    <div><label for="form-empowerment-commitment" class="block text-sm font-medium text-slate-700">Accountability & Commitment:<br><span class="text-xs text-slate-500 italic">(Timeline Coachee menjalankan Action Plan )</span></label><textarea id="form-empowerment-commitment" rows="3" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                </div>
+                
+                <div class="p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">SESSION WRAP-UP (Penutup Sesi)</h4>
+                    <div><label for="form-wrapup-value" class="block text-sm font-medium text-slate-700">Value of Session:<br><span class="text-xs text-slate-500 italic">(Feedback Coachee tentang nilai sesi ini)</span></label><textarea id="form-wrapup-value" rows="2" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea></div>
+                    <div><label for="form-wrapup-next" class="block text-sm font-medium text-slate-700">Jadwal Sesi Berikutnya:</label><input type="date" id="form-wrapup-next" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                </div>
+                
+                <div class="p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">Rencana Aksi Utama</h4>
+                    <div id="note-action-items-container" class="mt-2"></div>
+                    <button type="button" id="add-note-action-item-btn" class="text-sm text-blue-600 hover:underline mt-2">+ Tambah Rencana Aksi</button>
+                </div>
+                
+                <div class="flex items-center">
+                    <input type="checkbox" id="coachee-approval-checkbox" required class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                    <label for="coachee-approval-checkbox" class="ml-2 block text-sm text-slate-900">Saya telah mengisi catatan ini dengan lengkap dan benar.</label>
+                </div>
+            </form>
+            <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+                <button id="note-modal-cancel-btn" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-100 transition-colors">Batal</button>
+                <button id="note-modal-submit-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors">Kirim untuk Review</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coach Review Modal -->
+    <div id="coach-review-modal" class="session-modal hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl m-4 max-h-[90vh] flex flex-col">
+            <div class="p-4 sm:p-6 border-b"><h3 id="coach-review-modal-title" class="text-lg sm:text-xl font-bold text-slate-900">Review Catatan Sesi & Rencana Aksi</h3><p id="coach-review-modal-info" class="text-sm text-slate-500 mt-1"></p></div>
+            <div id="coach-review-form-container" class="p-4 sm:p-6 space-y-6 overflow-y-auto">
+                <input type="hidden" id="review-log-id">
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">C - CLARITY (Sasaran spesifik yang ingin dicapai oleh Coachee)</h4>
+                    <div><label for="review-form-clarity-agenda" class="block text-sm font-medium text-slate-700">Session's Agenda:</label><textarea id="review-form-clarity-agenda" rows="2" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label for="review-form-clarity-outcome" class="block text-sm font-medium text-slate-700">Desired Outcome:</label><textarea id="review-form-clarity-outcome" rows="2" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">A - AWAKENING (Menggali kesadaran Coachee)</h4>
+                    <div><label for="review-form-awakening-notes" class="block text-sm font-medium text-slate-700">Exploration Notes:</label><textarea id="review-form-awakening-notes" rows="3" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label for="review-form-awakening-takeaways" class="block text-sm font-medium text-slate-700">Key Takeaways:</label><textarea id="review-form-awakening-takeaways" rows="3" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">R - RESOLUTION (Resolusi & Keputusan)</h4>
+                    <div><label for="review-form-resolution-resolution" class="block text-sm font-medium text-slate-700">The Resolution:</label><textarea id="review-form-resolution-resolution" rows="3" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">E - EMPOWERMENT (Pemberdayaan & Determinasi)</h4>
+                    <div><label for="review-form-empowerment-commitment" class="block text-sm font-medium text-slate-700">Accountability & Commitment:</label><textarea id="review-form-empowerment-commitment" rows="3" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                <div class="p-4 border rounded-lg">
+                    <h4 class="font-bold text-lg text-slate-800">SESSION WRAP-UP (Penutup Sesi)</h4>
+                    <div><label for="review-form-wrapup-value" class="block text-sm font-medium text-slate-700">Value of Session:</label><textarea id="review-form-wrapup-value" rows="2" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label for="review-form-wrapup-next" class="block text-sm font-medium text-slate-700">Jadwal Sesi Berikutnya (Bisa Diedit):</label><input type="date" id="review-form-wrapup-next" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                    <div>
+                        <label for="review-form-wrapup-progress" class="block text-sm font-medium text-slate-700 font-semibold">Feedback Coach/Mentor <span class="text-red-500">(Wajib)</span></label>
+                        <textarea id="review-form-wrapup-progress" rows="2" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+                <button id="review-modal-cancel-btn" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-100">Batal</button>
+                <button id="review-modal-reject-btn" class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700">Tolak Rencana</button>
+                <button id="review-modal-approve-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700">Setujui Rencana</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Details Modal -->
+    <div id="session-details-modal" class="session-modal hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl m-4 max-h-[90vh] flex flex-col">
+            <div class="p-4 sm:p-6 border-b"><h3 id="session-details-modal-title" class="text-lg sm:text-xl font-bold text-slate-900">Detail Catatan Sesi</h3><p id="session-details-modal-info" class="text-sm text-slate-500 mt-1"></p></div>
+            <div id="session-details-form-container" class="p-4 sm:p-6 space-y-6 overflow-y-auto">
+                 <div class="space-y-4 p-4 border rounded-lg bg-slate-50">
+                    <h4 class="font-bold text-lg text-slate-800">C - CLARITY (Sasaran spesifik yang ingin dicapai oleh Coachee)</h4>
+                    <div><label class="block text-sm font-medium text-slate-700">Session's Agenda:</label><textarea id="details-clarity-agenda" readonly rows="2" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label class="block text-sm font-medium text-slate-700">Desired Outcome:</label><textarea id="details-clarity-outcome" readonly rows="2" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg bg-slate-50">
+                    <h4 class="font-bold text-lg text-slate-800">A - AWAKENING (Menggali kesadaran Coachee)</h4>
+                    <div><label class="block text-sm font-medium text-slate-700">Exploration Notes:</label><textarea id="details-awakening-notes" readonly rows="3" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label class="block text-sm font-medium text-slate-700">Key Takeaways:</label><textarea id="details-awakening-takeaways" readonly rows="3" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg bg-slate-50">
+                    <h4 class="font-bold text-lg text-slate-800">R - RESOLUTION (Resolusi & Keputusan)</h4>
+                    <div><label class="block text-sm font-medium text-slate-700">The Resolution:</label><textarea id="details-resolution-resolution" readonly rows="3" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg bg-slate-50">
+                    <h4 class="font-bold text-lg text-slate-800">E - EMPOWERMENT (Pemberdayaan & Determinasi)</h4>
+                    <div><label class="block text-sm font-medium text-slate-700">Accountability & Commitment:</label><textarea id="details-empowerment-commitment" readonly rows="3" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                </div>
+                 <div class="space-y-4 p-4 border rounded-lg bg-slate-50">
+                    <h4 class="font-bold text-lg text-slate-800">SESSION WRAP-UP (Penutup Sesi)</h4>
+                    <div><label class="block text-sm font-medium text-slate-700">Value of Session:</label><textarea id="details-wrapup-value" readonly rows="2" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label class="block text-sm font-medium text-slate-700">Feedback Coach/Mentor:</label><textarea id="details-wrapup-progress" readonly rows="2" class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></textarea></div>
+                    <div><label class="block text-sm font-medium text-slate-700">Jadwal Sesi Berikutnya:</label><input type="date" id="details-wrapup-next" readonly class="mt-1 block w-full p-2 border-none bg-slate-100 rounded-md shadow-inner"></div>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+                 <button id="download-detail-txt-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700">Unduh (.txt)</button>
+                 <button id="session-details-close-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-session-modal" class="session-modal hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg m-4 flex flex-col">
+            <div class="p-6 border-b"><h3 class="text-xl font-bold text-slate-900">Edit Jadwal Sesi</h3></div>
+            <form id="edit-session-form" class="p-6 space-y-4">
+                <input type="hidden" id="edit-modal-session-id">
+                <div><label for="edit-modal-date" class="block text-sm font-medium text-slate-700">Tanggal</label><input type="date" id="edit-modal-date" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                <div><label for="edit-modal-topic" class="block text-sm font-medium text-slate-700">Topik</label><input type="text" id="edit-modal-topic" required class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+            </form>
+            <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+                <button id="edit-modal-cancel-btn" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-100">Batal</button>
+                <button id="edit-modal-submit-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="confirmation-modal" class="confirm-modal hidden">
+        <div class="modal-content">
+            <h3 id="confirm-title" class="text-lg font-bold text-slate-900 mb-2">Konfirmasi Tindakan</h3>
+            <p id="confirm-message" class="text-slate-600 mb-6">Apakah Anda yakin?</p>
+            <div class="flex justify-center gap-4">
+                <button id="confirm-cancel-btn" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-lg font-semibold hover:bg-slate-300">Batal</button>
+                <button id="confirm-ok-btn" class="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">Yakin</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, onSnapshot, addDoc, updateDoc, writeBatch, query, setLogLevel, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyD-oH9MiKNj1Bz02HZ3PWSYScpXwvSROYM",
+          authDomain: "coaching-hub-star.firebaseapp.com",
+          projectId: "coaching-hub-star",
+          storageBucket: "coaching-hub-star.firebasestorage.app",
+          messagingSenderId: "414500185726",
+          appId: "1:414500185726:web:2f4be8dd29234c13f5da2f"
+        };
+
+        const appId = 'coaching-mgr';
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        setLogLevel('debug');
+
+        const participantsCol = collection(db, `artifacts/${appId}/public/data/participants`);
+        const sessionsCol = collection(db, `artifacts/${appId}/public/data/sessions`);
+        const coachingLogsCol = collection(db, `artifacts/${appId}/public/data/coachingLogs`);
+        const availabilitiesCol = collection(db, `artifacts/${appId}/public/data/coachAvailabilities`);
+        const metadataCol = collection(db, `artifacts/${appId}/public/data/_metadata`);
+
+        let state = {
+            currentUser: null,
+            userRole: null, 
+            participants: [],
+            sessions: [],
+            coachingLogs: [],
+            coaches: [],
+            availabilities: {},
+            tempAvailabilities: [],
+            isDataReady: false,
+            calendar: {
+                coach: { month: new Date().getMonth(), year: new Date().getFullYear() },
+                peserta: { month: new Date().getMonth(), year: new Date().getFullYear() },
+                admin: { month: new Date().getMonth(), year: new Date().getFullYear() },
+            },
+        };
+
+        const mentorNikMap = {
+            '20000301HE': 'HADI EKO SUSENO & TRI PRAYITNO', '20000111TP': 'HADI EKO SUSENO & TRI PRAYITNO', 'BCP0009076': 'RAY FANDI', '2017112459IM': 'INDRA PRIMA LUKITO',
+            '20130610DY': 'DEBBY YUGIANDI PERMANA', '20040615WS': 'WAWAN SETYAWAN', '2016080693NA': 'NASDIN SJAMSUDDIN',
+            'BCP0009880': 'ARIF FAKIH, S.T.', '2017112482I': 'I PUTU EKA RIZKY SAPUTRA', '2017040508SU': 'SUFARMAN MUH ALI',
+        };
+        state.coaches = Object.values(mentorNikMap);
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+
+        async function main() {
+            try {
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        await initializeAndLoadData();
+                        setupRealtimeListeners();
+                    } else {
+                        showLoginScreen();
+                    }
+                });
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Firebase Authentication failed:", error);
+                loadingText.textContent = "Gagal melakukan otentikasi. Cek konfigurasi Firebase dan Authorized Domains.";
+                loadingOverlay.querySelector('.loader').classList.add('hidden');
+            }
+        }
+        
+        async function initializeAndLoadData() {
+            try {
+                loadingText.textContent = "Memeriksa data...";
+                const seedingFlagRef = doc(metadataCol, 'seeding_status');
+                const seedingFlagSnap = await getDoc(seedingFlagRef);
+
+                if (!seedingFlagSnap.exists()) {
+                    console.log("Seeding flag not found. Checking participants collection...");
+                    const participantsSnapshotCheck = await getDocs(query(participantsCol));
+                    if (participantsSnapshotCheck.empty) {
+                        console.log("Participants collection is empty. Seeding initial data...");
+                        loadingText.textContent = "Menyiapkan data awal untuk pertama kali...";
+                        const initialParticipantsData = [
+                            { name: 'WISNU JATI NUGROHO', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0009308' }, { name: 'NUNUNG SUPRIADY', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0008621' },
+                            { name: 'FILTRA ABSRI', coach: 'RAY FANDI', password: 'BCP0009188' }, { name: 'URBANUS MASYUR', coach: 'INDRA PRIMA LUKITO', password: 'BCP0009504' },
+                            { name: 'ZULKIFLI MOKODOMPIT', coach: 'DEBBY YUGIANDI PERMANA', password: 'BCP0009280' }, { name: 'YOSEP ANGGARIAWAN', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0008632' },
+                            { name: 'BETA JAUVAN FEDRIANTO', coach: 'I PUTU EKA RIZKY SAPUTRA', password: 'BCP0009404' }, { name: 'ILHAM S', coach: 'SUFARMAN MUH ALI', password: 'BCP0009653' },
+                            { name: 'MUHAMMAD SLAMET TIARA RAMADHAN', coach: 'RAY FANDI', password: 'BCP0009588' }, { name: 'MUKAMAT RIYONO MUBAROCHMAN', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0009586' },
+                            { name: 'DHANI ARISANDI', coach: 'WAWAN SETYAWAN', password: '20120501DA' }, { name: 'TRIO AFRIYONO', coach: 'NASDIN SJAMSUDDIN', password: '2022040834' },
+                            { name: 'INDRA RAHMAN PUTRA', coach: 'ARIF FAKIH, S.T.', password: '2020120548' }
+                        ];
+                        const batch = writeBatch(db);
+                        initialParticipantsData.forEach(p => { 
+                            const newParticipantRef = doc(participantsCol);
+                            batch.set(newParticipantRef, {...p, level: 'Peserta STAR'}); 
+                        });
+                        batch.set(seedingFlagRef, { completed: true, timestamp: new Date() });
+                        
+                        await batch.commit();
+                        console.log("Seeding complete.");
+                    } else {
+                        console.log("Participants exist, but seeding flag was missing. Setting flag now.");
+                        await setDoc(seedingFlagRef, { completed: true, timestamp: new Date(), note: "Flag created retroactively." });
+                    }
+                }
+
+                loadingText.textContent = "Memuat data peserta...";
+                const participantsSnapshot = await getDocs(query(participantsCol));
+                state.participants = participantsSnapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+                
+                console.log(`Successfully loaded ${state.participants.length} participants.`);
+                state.isDataReady = true;
+                checkSavedLogin();
+
+            } catch (error) {
+                console.error("Failed to load or seed initial data:", error);
+                loadingText.textContent = "Gagal memuat data. Cek koneksi dan aturan keamanan Firestore.";
+                loadingOverlay.querySelector('.loader').classList.add('hidden');
+            }
+        }
+        
+        document.getElementById('entry-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            if (!state.isDataReady) {
+                showConfirmation('Mohon Tunggu', 'Data sedang dimuat, silakan coba lagi sesaat.', null, true, false);
+                return;
+            }
+
+            const password = document.getElementById('entry-password').value;
+            const errorEl = document.getElementById('entry-error');
+            
+            const handleLogin = (user, role) => {
+                state.currentUser = user;
+                state.userRole = role;
+                localStorage.setItem('coachingHubUser', JSON.stringify({ id: user.password || user.name, role }));
+                switchView(role);
+                renderViews();
+                errorEl.classList.add('hidden');
+                errorEl.classList.remove('error-shake');
+            };
+
+            if (password === 'otdborwita2025') {
+                handleLogin({ name: 'Admin', password: 'otdborwita2025' }, 'admin');
+                return;
+            }
+            const mentorName = mentorNikMap[password];
+            if (mentorName) {
+                handleLogin({ name: mentorName, password: password }, 'coach');
+                return;
+            }
+            
+            const participant = state.participants.find(p => p.password === password);
+            if (participant) {
+                handleLogin(participant, 'peserta');
+                return;
+            }
+            
+            errorEl.textContent = "Password tidak ditemukan. Pastikan data telah termuat.";
+            errorEl.classList.remove('hidden');
+            errorEl.classList.add('error-shake');
+            setTimeout(() => errorEl.classList.remove('error-shake'), 500);
+        });
+
+        function setupRealtimeListeners() {
+            onSnapshot(participantsCol, (snapshot) => {
+                state.participants = snapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+                state.coaches = Object.values(mentorNikMap);
+                if (state.currentUser) renderViews();
+            });
+            onSnapshot(availabilitiesCol, (snapshot) => {
+                state.availabilities = {};
+                snapshot.docs.forEach(doc => { state.availabilities[doc.id] = doc.data().availableDates || []; });
+                if (state.currentUser && state.userRole === 'coach') {
+                    state.tempAvailabilities = [...(state.availabilities[state.currentUser.name] || [])];
+                }
+                if (state.currentUser) renderViews();
+            });
+            onSnapshot(sessionsCol, (snapshot) => {
+                state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (state.currentUser) renderViews();
+            });
+            onSnapshot(coachingLogsCol, (snapshot) => {
+                state.coachingLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (state.currentUser) renderViews();
+            });
+        }
+
+        function hideLoading() {
+            loadingOverlay.style.opacity = '0';
+            setTimeout(() => loadingOverlay.classList.add('hidden'), 300);
+        }
+
+        function showLoginScreen() {
+            hideLoading();
+            document.body.classList.remove('auth-pending');
+            document.getElementById('entry-header').classList.remove('-translate-y-full');
+            document.getElementById('login-overlay-block').classList.remove('hidden');
+        }
+
+        function switchView(role) {
+            const logoutBtn = document.getElementById('logout-btn');
+            const views = {
+                peserta: document.getElementById('peserta-view'),
+                coach: document.getElementById('coach-view'),
+                admin: document.getElementById('admin-view'),
+            };
+
+            if (role) {
+                document.getElementById('entry-header').classList.add('-translate-y-full');
+                document.getElementById('login-overlay-block').classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                Object.values(views).forEach(v => v.classList.remove('active'));
+                views[role].classList.add('active');
+                document.body.classList.remove('auth-pending');
+                document.getElementById('app-container').style.visibility = 'visible';
+            } else {
+                state.currentUser = null;
+                state.userRole = null;
+                logoutBtn.classList.add('hidden');
+                Object.values(views).forEach(v => v.classList.remove('active'));
+                showLoginScreen();
+            }
+        }
+
+        function renderViews() {
+            if (!state.currentUser) return;
+            document.getElementById('welcome-message').textContent = `Selamat datang, ${state.currentUser.name}!`;
+
+            switch (state.userRole) {
+                case 'peserta': renderPesertaView(); break;
+                case 'coach': renderCoachView(); break;
+                case 'admin': renderAdminView(); break;
+            }
+        }
+        
+        function toYYYYMMDD(date) {
+            const d = new Date(date);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function renderPesertaView() {
+            const jadwalList = document.getElementById('peserta-jadwal-list');
+            const progressList = document.getElementById('peserta-progress-list');
+            document.getElementById('peserta-coach-name').textContent = state.currentUser.coach || 'Belum Ditentukan';
+            
+            const mySessions = state.sessions.filter(s => s.coacheeId === state.currentUser.docId);
+            const sortedSessions = [...mySessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            jadwalList.innerHTML = sortedSessions.length > 0 ? sortedSessions.map(session => renderSessionCard(session, 'peserta')).join('') : `<div class="text-center p-6 text-slate-500"><span class="text-4xl">🗓️</span><p class="mt-2 font-semibold">Belum ada jadwal</p><p class="text-sm">Ajukan jadwal baru di samping.</p></div>`;
+            progressList.innerHTML = renderIndividualProgress(state.currentUser.docId);
+
+            const calendarContainer = document.getElementById('peserta-availability-calendar');
+            const coachName = state.currentUser.coach;
+            const availableDates = state.availabilities[coachName] || [];
+            const { month, year } = state.calendar.peserta;
+            renderCalendar(calendarContainer, month, year, 'peserta', availableDates);
+        }
+        
+        function renderCoachView() {
+            const participantList = document.getElementById('coach-participant-list');
+            const jadwalList = document.getElementById('coach-jadwal-list');
+            const myCoachees = state.participants.filter(p => p.coach === state.currentUser.name);
+
+            participantList.innerHTML = myCoachees.length > 0 ? myCoachees.map(p => {
+                const logs = state.coachingLogs.filter(log => log.coacheeId === p.docId);
+                const completedCount = logs.length;
+                const progress = (completedCount / 6) * 100;
+                return `<div class="bg-white p-4 rounded-xl shadow-md">
+                            <h3 class="font-bold text-xl text-slate-800">${p.name}</h3>
+                            <p class="text-sm font-medium text-slate-600">Total Sesi: <span class="font-bold">${completedCount}/6</span></p>
+                            <div class="progress-bar-container mt-2">
+                                <div class="progress-bar" style="width: ${progress}%;"></div>
+                            </div>
+                            <button class="view-coachee-progress-btn text-blue-600 text-sm mt-2 hover:underline" data-id="${p.docId}">Lihat Progress Detail</button>
+                            <div class="progress-detail-container overflow-y-auto" id="progress-container-${p.docId}"></div>
+                        </div>`;
+            }).join('') : `<p class="text-center text-slate-500 italic">Anda belum memiliki peserta.</p>`;
+            
+            const myCoacheeIds = myCoachees.map(p => p.docId);
+            const mySessions = state.sessions.filter(s => myCoacheeIds.includes(s.coacheeId));
+            const sortedSessions = [...mySessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            jadwalList.innerHTML = sortedSessions.length > 0 ? sortedSessions.map(session => renderSessionCard(session, 'coach')).join('') : `<div class="text-center p-6 text-slate-500"><span class="text-4xl">📋</span><p class="mt-2 font-semibold">Belum ada jadwal</p><p class="text-sm">Tunggu pengajuan dari peserta.</p></div>`;
+
+            const calendarContainer = document.getElementById('coach-availability-calendar');
+            const { month, year } = state.calendar.coach;
+            renderCalendar(calendarContainer, month, year, 'coach', state.tempAvailabilities);
+        }
+
+        function renderAdminView() {
+            document.getElementById('stat-total-peserta').textContent = state.participants.length;
+            document.getElementById('stat-total-coach').textContent = Object.keys(mentorNikMap).length;
+            document.getElementById('stat-sesi-selesai').textContent = state.sessions.filter(s => s.status === 'Selesai').length;
+            document.getElementById('stat-sesi-menunggu').textContent = state.sessions.filter(s => s.status === 'Diajukan' || s.status === 'Disetujui').length;
+            
+            const adminCalendarContainer = document.getElementById('admin-upcoming-calendar');
+            const { month, year } = state.calendar.admin;
+            renderAdminCalendar(adminCalendarContainer, month, year);
+
+            const participantList = document.getElementById('admin-participant-list');
+            const sortedParticipants = [...state.participants].sort((a,b) => a.name.localeCompare(b.name));
+
+            participantList.innerHTML = sortedParticipants.length > 0 ? sortedParticipants.map(p => {
+                const logs = state.coachingLogs.filter(log => log.coacheeId === p.docId);
+                const completedCount = logs.length;
+                const progress = (completedCount / 6) * 100;
+
+                const participantSessions = state.sessions
+                    .filter(s => s.coacheeId === p.docId)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                const sessionsHtml = participantSessions.length > 0 
+                    ? `<div class="mt-4 pt-4 border-t border-slate-200">
+                           <h4 class="text-sm font-semibold text-slate-600 mb-2">Jadwal Sesi Diajukan:</h4>
+                           <div class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                               ${participantSessions.map(renderAdminSessionItem).join('')}
+                           </div>
+                       </div>`
+                    : '<p class="text-xs text-slate-400 italic mt-4 pt-4 border-t border-slate-200">Belum ada jadwal yang diajukan.</p>';
+
+                return `<div class="bg-white p-4 rounded-xl shadow-md">
+                            <h3 class="font-bold text-xl text-slate-800">${p.name}</h3>
+                            <p class="text-sm font-medium text-slate-600">Coach: ${p.coach} | Sesi Selesai: <span class="font-bold">${completedCount}/6</span></p>
+                            <div class="progress-bar-container mt-2">
+                                <div class="progress-bar" style="width: ${progress}%;"></div>
+                            </div>
+                            ${sessionsHtml}
+                            <div class="flex flex-col sm:flex-row gap-2 mt-4 pt-4 border-t border-slate-200">
+                                <button class="view-coachee-progress-btn flex-1 text-blue-600 text-sm hover:underline" data-id="${p.docId}">Lihat Progress Detail</button>
+                                <button class="download-coachee-report-btn flex-1 text-green-600 text-sm hover:underline" data-id="${p.docId}">Unduh Detail Sesi (.csv)</button>
+                            </div>
+                            <div class="progress-detail-container overflow-y-auto" id="progress-container-${p.docId}"></div>
+                        </div>`;
+            }).join('') : `<p class="text-center text-slate-500 italic">Tidak ada data peserta.</p>`;
+        }
+        
+        function renderAdminSessionItem(session) {
+            const sessionDate = new Date(session.date + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+            let statusBadge = '';
+            switch(session.status) {
+                case 'Diajukan': statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Diajukan</span>`; break;
+                case 'Disetujui': statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Disetujui</span>`; break;
+                case 'Ditolak': statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Ditolak</span>`; break;
+                case 'Selesai': statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Selesai</span>`; break;
+                default: statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">${session.status}</span>`;
+            }
+            return `<div class="text-sm p-2 bg-slate-50 rounded-md flex justify-between items-center">
+                        <div>
+                            <p class="font-medium text-slate-600">${session.topic || session.type}</p>
+                            <p class="text-xs text-slate-400">${sessionDate}</p>
+                        </div>
+                        ${statusBadge}
+                    </div>`;
+        }
+
+        function renderSessionCard(session, role) {
+            const coachee = state.participants.find(p => p.docId === session.coacheeId);
+            if (!coachee) {
+                console.warn(`Could not find participant for session ID: ${session.id} with coacheeId: ${session.coacheeId}`);
+                return '';
+            }
+            const sessionDate = new Date(session.date + 'T00:00:00');
+            const month = sessionDate.toLocaleString('id-ID', { month: 'short' });
+            const day = sessionDate.getDate();
+            let statusBadge = '', actionButtons = '';
+
+            switch(session.status) {
+                case 'Diajukan': statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">${role === 'peserta' ? 'Menunggu Persetujuan' : 'Diajukan'}</span>`; break;
+                case 'Disetujui': statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Disetujui</span>`; break;
+                case 'Ditolak': statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Ditolak</span>`; break;
+                case 'Selesai': statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Selesai</span>`; break;
+            }
+            
+            if (session.status === 'Disetujui' && role === 'peserta') {
+                 actionButtons += `<div class="mt-2"><button data-id="${session.id}" data-action="complete" class="action-btn w-full bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded hover:bg-blue-700">Isi Catatan Sesi</button></div>`;
+            }
+
+            if (role === 'coach') {
+                if (session.status === 'Diajukan') {
+                    actionButtons += `<div class="mt-2 flex gap-2">
+                        <button data-id="${session.id}" data-action="approve" class="action-btn flex-1 bg-green-100 text-green-800 text-xs font-bold py-1 px-2 rounded hover:bg-green-200">Approve</button>
+                        <button data-id="${session.id}" data-action="decline" class="action-btn flex-1 bg-red-100 text-red-800 text-xs font-bold py-1 px-2 rounded hover:bg-red-200">Decline</button>
+                    </div>`;
+                }
+                actionButtons += `<div class="mt-2 flex gap-2">
+                    <button data-id="${session.id}" data-action="edit" class="action-btn flex-1 bg-yellow-100 text-yellow-800 text-xs font-bold py-1 px-2 rounded hover:bg-yellow-200">Edit</button>
+                    <button data-id="${session.id}" data-action="delete" class="action-btn flex-1 bg-red-100 text-red-800 text-xs font-bold py-1 px-2 rounded hover:bg-red-200">Hapus</button>
+                </div>`;
+            }
+
+            if (session.status === 'Disetujui' || session.status === 'Selesai') {
+                actionButtons += `<div class="mt-2 flex gap-2">`;
+                if(session.media === 'Online' && session.link) {
+                    actionButtons += `<button data-link="${session.link}" class="open-meet-btn flex-1 bg-blue-50 text-blue-700 text-xs font-bold py-1 px-2 rounded hover:bg-blue-100">Buka Meet</button>`;
+                } else if (session.media === 'Offline' && session.location) {
+                    actionButtons += `<span class="flex-1 text-center bg-gray-50 text-gray-700 text-xs font-bold py-1 px-2 rounded">Lokasi: ${session.location}</span>`;
+                }
+                actionButtons += `<button data-session='${JSON.stringify(session)}' class="add-calendar-btn flex-1 bg-gray-50 text-gray-700 text-xs font-bold py-1 px-2 rounded hover:bg-gray-100">Tambah ke Kalender</button>`;
+                actionButtons += `</div>`;
+            }
+
+            return `<div class="p-4 border rounded-lg flex items-start">
+                        <div class="text-center mr-4 flex-shrink-0"><p class="text-sm text-slate-500">${month}</p><p class="text-2xl font-bold">${day}</p></div>
+                        <div class="flex-grow">
+                            <p class="font-semibold">${session.topic || 'Tanpa Topik'} (${session.type})</p>
+                            <p class="text-sm text-slate-500">${role === 'peserta' ? `Coach: ${coachee.coach}` : `Peserta: ${coachee.name}`}</p>
+                            <div class="mt-1">${statusBadge}</div>
+                            ${actionButtons}
+                        </div>
+                    </div>`;
+        }
+
+        function renderIndividualProgress(participantId, isCoachOrAdmin = false) {
+            const participantLogs = state.coachingLogs.filter(log => log.coacheeId === participantId);
+            const sortedLogs = participantLogs.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            if (sortedLogs.length === 0) {
+                return '<p class="text-sm text-slate-500 italic p-4 text-center">Belum ada sesi coaching yang dicatat.</p>';
+            }
+            
+            return sortedLogs.map((log, index) => renderSingleLog(log, index, isCoachOrAdmin)).join('');
+        }
+
+        function renderSingleLog(log, index, isCoachOrAdmin) {
+            const planApprovalHtml = renderPlanApprovalStatus(log, isCoachOrAdmin);
+            const actionItemsHtml = renderActionItems(log, isCoachOrAdmin);
+
+            return `<div class="mt-2 bg-white rounded-md border">
+                        <div class="p-3 border-b">
+                            <p class="font-semibold text-slate-700">${log.topic}</p>
+                            <p class="text-xs text-slate-400">Sesi ke-${index + 1} | Tanggal: ${new Date(log.date + 'T00:00:00').toLocaleDateString('id-ID')} | Coach: ${log.coach}</p>
+                            <div class="mt-2">${planApprovalHtml}</div>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold px-3 pt-3">Action Items:</h4>
+                            ${actionItemsHtml || '<p class="text-xs text-slate-400 italic px-3 pb-2">Tidak ada action item.</p>'}
+                        </div>
+                    </div>`;
+        }
+        
+        function renderPlanApprovalStatus(log, isCoachOrAdmin) {
+            switch(log.planStatus) {
+                case 'pending_coach_approval':
+                    return `<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                                <p class="text-sm font-semibold text-yellow-800">${isCoachOrAdmin ? 'Rencana Aksi ini menunggu persetujuan Anda.' : 'Menunggu Coach/Mentor mereview catatan Anda'}</p>
+                                ${isCoachOrAdmin ? `<button data-log-id="${log.id}" class="review-plan-btn w-full bg-blue-500 text-white text-xs font-bold py-1 px-2 rounded hover:bg-blue-600 mt-2">Review Rencana Aksi</button>` : ''}
+                            </div>`;
+                case 'approved':
+                    return `<div class="p-3 bg-green-50 border border-green-200 rounded-md">
+                                <p class="text-sm font-semibold text-green-800">Rencana Aksi Disetujui</p>
+                                <button data-log-id="${log.id}" class="view-session-details-btn mt-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Lihat Detail Sesi</button>
+                            </div>`;
+                case 'rejected':
+                     return `<div class="p-3 bg-red-50 border border-red-200 rounded-md">
+                                <p class="text-sm font-semibold text-red-800">Rencana Aksi Ditolak</p>
+                                ${state.userRole === 'peserta' ? `<button data-log-id="${log.id}" class="revise-plan-btn mt-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Revisi Rencana</button>` : ''}
+                            </div>`;
+                default:
+                    return `<div class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600 italic">Menunggu Peserta Mengisi Catatan Sesi</div>`;
+            }
+        }
+        
+        function renderActionItems(log, isCoachOrAdmin) {
+            if(!log.actionItems) return '';
+            return log.actionItems.map((item, index) => renderSingleActionItem(item, index, log, isCoachOrAdmin)).join('');
+        }
+        
+        function renderSingleActionItem(item, itemIndex, log, isCoachOrAdmin) {
+            let statusHtml = '', actionButton = '', reportForm = '';
+            const reportText = item.report ? `<div class="mt-2 p-2 bg-slate-50 rounded-md text-xs"><p class="font-semibold">Laporan Peserta:</p><p>${item.report}</p></div>` : '';
+            const evidenceHtml = item.evidenceUrl ? `<div class="mt-2 text-xs"><p class="font-semibold">Bukti:</p><a href="${item.evidenceUrl}" target="_blank" class="text-blue-600 hover:underline">Link Bukti</a></div>` : '';
+
+            switch(item.status) {
+                case 'pending_approval':
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Menunggu Persetujuan Coach</span>`;
+                    if (isCoachOrAdmin) {
+                        actionButton = `<div class="mt-2 flex gap-2"><button data-log-id="${log.id}" data-item-index="${itemIndex}" data-action="approve" class="approve-reject-report-btn flex-1 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Setujui</button><button data-log-id="${log.id}" data-item-index="${itemIndex}" data-action="reject" class="approve-reject-report-btn flex-1 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Tolak</button></div>`;
+                    }
+                    break;
+                case 'approved':
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Selesai</span>`;
+                    break;
+                case 'rejected':
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Ditolak</span>`;
+                    break;
+                default:
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Belum Dikerjakan</span>`;
+            }
+
+            if (state.userRole === 'peserta' && log.planStatus === 'approved' && (item.status === 'open' || item.status === 'rejected')) {
+                const isRevision = item.status === 'rejected';
+                actionButton = `<button data-log-id="${log.id}" data-item-index="${itemIndex}" class="report-item-btn text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded mt-2">${isRevision ? 'Perbaiki Laporan' : 'Lapor Pengerjaan'}</button>`;
+                reportForm = `<div class="report-form hidden mt-4 bg-slate-100 p-4 rounded-lg">
+                                <form data-log-id="${log.id}" data-item-index="${itemIndex}" class="inline-report-form space-y-2">
+                                    <div><label class="block text-sm font-medium">Laporan Singkat</label><textarea required class="report-text mt-1 block w-full p-2 border rounded-md text-sm" rows="2">${isRevision ? item.report : ''}</textarea></div>
+                                    <div><label class="block text-sm font-medium">Link Bukti (Opsional)</label><input type="url" class="report-url mt-1 block w-full p-2 border rounded-md text-sm" placeholder="https://..." value="${isRevision ? item.evidenceUrl : ''}"></div>
+                                    <div class="flex gap-2"><button type="button" class="cancel-report-btn flex-1 bg-slate-300 text-slate-800 text-xs font-bold py-1 rounded">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white text-xs font-bold py-1 rounded">Kirim Laporan</button></div>
+                                </form>
+                            </div>`;
+            }
+            
+            return `<div class="p-3 border-t">
+                        <div class="flex items-start">
+                            <div class="flex-grow">
+                                <p class="font-medium text-slate-700">${item.text}</p>
+                                <p class="text-xs text-slate-500">Target: ${new Date(item.targetDate + 'T00:00:00').toLocaleDateString('id-ID')}</p>
+                                <div class="mt-1">${statusHtml}</div>
+                                ${reportText}${evidenceHtml}${actionButton}${reportForm}
+                            </div>
+                        </div>
+                    </div>`;
+        }
+
+        function renderCalendar(container, month, year, role, availableDates = []) {
+            container.innerHTML = '';
+            const date = new Date(year, month);
+            const monthName = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-center mb-2';
+            header.innerHTML = `<button data-role="${role}" data-action="prev" class="calendar-nav p-2 rounded-full hover:bg-slate-200">‹</button><span class="font-semibold text-center">${monthName}</span><button data-role="${role}" data-action="next" class="calendar-nav p-2 rounded-full hover:bg-slate-200">›</button>`;
+            container.appendChild(header);
+            const grid = document.createElement('div');
+            grid.className = 'calendar-grid';
+            ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].forEach(day => {
+                const dayEl = document.createElement('div'); dayEl.className = 'calendar-day header'; dayEl.textContent = day; grid.appendChild(dayEl);
+            });
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date(); today.setHours(0,0,0,0);
+            for (let i = 0; i < firstDay; i++) { grid.appendChild(document.createElement('div')); }
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dayEl = document.createElement('div');
+                const currentDate = new Date(year, month, i);
+                const dateString = toYYYYMMDD(currentDate);
+                dayEl.className = 'calendar-day';
+                dayEl.textContent = i;
+                dayEl.dataset.date = dateString;
+                if (currentDate < today) { dayEl.classList.add('other-month'); }
+                else {
+                    dayEl.classList.add('selectable');
+                    if (role === 'coach' && availableDates.includes(dateString)) dayEl.classList.add('available');
+                    if (role === 'peserta' && availableDates.includes(dateString)) dayEl.classList.add('available');
+                }
+                if (currentDate.getTime() === today.getTime()) dayEl.classList.add('today');
+                grid.appendChild(dayEl);
+            }
+            container.appendChild(grid);
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('coachingHubUser');
+            document.getElementById('entry-form').reset();
+            switchView(null);
+        });
+        
+        document.getElementById('peserta-propose-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const date = document.getElementById('peserta-propose-date').value;
+            const topic = document.getElementById('peserta-propose-topic').value;
+            const agendaType = document.getElementById('peserta-propose-agenda').value;
+            const type = agendaType === 'Lainnya' ? document.getElementById('peserta-propose-agenda-lainnya').value : agendaType;
+            const media = document.getElementById('peserta-propose-media').value;
+            const location = media === 'Offline' ? document.getElementById('peserta-propose-location').value : null;
+            const link = media === 'Online' ? document.getElementById('peserta-propose-link').value : null;
+            
+            if (!date) { showConfirmation('Peringatan', 'Silakan pilih tanggal yang tersedia (berwarna hijau) pada kalender.', null, true, false); return; }
+            await addDoc(sessionsCol, { coacheeId: state.currentUser.docId, date, topic, type, media, location, link, status: 'Diajukan' });
+            e.target.reset();
+            document.getElementById('peserta-propose-date').value = '';
+            document.getElementById('selected-date-display').textContent = '';
+            document.getElementById('peserta-propose-agenda-lainnya').classList.add('hidden');
+            document.getElementById('location-input-container').classList.add('hidden');
+            document.getElementById('link-input-container').classList.remove('hidden');
+            document.getElementById('session-number-display').textContent = '';
+            showConfirmation('Berhasil!', 'Jadwal sesi berhasil diajukan.', null, true, true);
+        });
+        
+        document.addEventListener('click', async (e) => {
+            const target = e.target;
+            if(target.closest('.calendar-nav')) {
+                const button = target.closest('.calendar-nav');
+                const role = button.dataset.role;
+                let { month, year } = state.calendar[role];
+                if (button.dataset.action === 'prev') { month--; if (month < 0) { month = 11; year--; } }
+                else { month++; if (month > 11) { month = 0; year++; } }
+                state.calendar[role] = { month, year };
+                if (role === 'coach') renderCoachView(); 
+                else if (role === 'peserta') renderPesertaView();
+                else if (role === 'admin') renderAdminView();
+            }
+            if(target.matches('#coach-availability-calendar .calendar-day.selectable')) {
+                const dateString = target.dataset.date;
+                if(state.tempAvailabilities.includes(dateString)) {
+                    state.tempAvailabilities = state.tempAvailabilities.filter(d => d !== dateString);
+                } else {
+                    state.tempAvailabilities.push(dateString);
+                }
+                renderCalendar(document.getElementById('coach-availability-calendar'), state.calendar.coach.month, state.calendar.coach.year, 'coach', state.tempAvailabilities);
+            }
+            if(target.matches('#peserta-availability-calendar .calendar-day.available')) {
+                const dateString = target.dataset.date;
+                document.querySelectorAll('#peserta-availability-calendar .calendar-day.selected').forEach(el => el.classList.remove('selected'));
+                target.classList.add('selected');
+                document.getElementById('peserta-propose-date').value = dateString;
+                document.getElementById('selected-date-display').textContent = `Tanggal Dipilih: ${new Date(dateString + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+            }
+            if(target.matches('.action-btn')) {
+                const { id, action } = target.dataset;
+                const sessionDocRef = doc(db, sessionsCol.path, id);
+                if (action === 'approve') await updateDoc(sessionDocRef, { status: 'Disetujui' });
+                else if (action === 'decline') await updateDoc(sessionDocRef, { status: 'Ditolak' });
+                else if (action === 'complete') openSessionNoteModal(null, id);
+                else if (action === 'edit') openEditModal(id);
+                else if (action === 'delete') showConfirmation('Hapus Jadwal', 'Yakin ingin menghapus jadwal ini?', async () => await deleteDoc(sessionDocRef));
+            }
+            if(target.matches('.report-item-btn')) {
+                const parentDiv = target.closest('.p-3');
+                const formDiv = parentDiv.querySelector('.report-form');
+                if (formDiv) {
+                    const isVisible = !formDiv.classList.contains('hidden');
+                    document.querySelectorAll('.report-form').forEach(form => form.classList.add('hidden'));
+                    if(!isVisible) formDiv.classList.remove('hidden');
+                }
+            }
+            if(target.matches('.cancel-report-btn')) {
+                target.closest('.report-form').classList.add('hidden');
+            }
+            if(target.matches('.approve-reject-report-btn')) {
+                const { logId, itemIndex, action } = target.dataset;
+                const log = state.coachingLogs.find(l => l.id === logId);
+                const newActionItems = [...log.actionItems];
+                newActionItems[itemIndex].status = action === 'approve' ? 'approved' : 'rejected';
+                await updateDoc(doc(db, coachingLogsCol.path, logId), { actionItems: newActionItems });
+            }
+            if(target.matches('.review-plan-btn')) openCoachReviewModal(target.dataset.logId);
+            if(target.matches('.revise-plan-btn')) {
+                const log = state.coachingLogs.find(l => l.id === target.dataset.logId);
+                openSessionNoteModal(log);
+            }
+            if(target.matches('.view-session-details-btn')) openSessionDetailsModal(target.dataset.logId);
+            if(target.matches('#save-availability-btn')) {
+                const coachName = state.currentUser.name;
+                const docRef = doc(db, availabilitiesCol.path, coachName);
+                await setDoc(docRef, { availableDates: state.tempAvailabilities });
+                const msg = document.getElementById('availability-saved-msg');
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 2000);
+            }
+            if(target.matches('.open-meet-btn')) { window.open(target.dataset.link, '_blank'); }
+            if(target.matches('.add-calendar-btn')) {
+                const session = JSON.parse(target.dataset.session);
+                const startDate = new Date(session.date + 'T09:00:00');
+                const endDate = new Date(session.date + 'T10:00:00');
+                const title = encodeURIComponent(`Coaching: ${session.topic}`);
+                const details = encodeURIComponent(`Sesi coaching dengan ${session.type}. Link Meet: ${session.link || 'N/A'}`);
+                const googleCalendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${endDate.toISOString().replace(/-|:|\.\d\d\d/g,"")}&details=${details}`;
+                window.open(googleCalendarUrl, '_blank');
+            }
+            if (target.matches('.view-coachee-progress-btn')) {
+                 const coacheeId = target.dataset.id;
+                 const container = document.getElementById(`progress-container-${coacheeId}`);
+                 const btn = target;
+                 const isCoachOrAdmin = state.userRole === 'coach' || state.userRole === 'admin';
+                 const isExpanded = container.classList.contains('open');
+
+                 if (isExpanded) {
+                   container.classList.remove('open');
+                   btn.textContent = 'Lihat Progress Detail';
+                 } else {
+                   const coachee = state.participants.find(p => p.docId === coacheeId);
+                   if (coachee) {
+                     container.innerHTML = renderIndividualProgress(coacheeId, isCoachOrAdmin);
+                     container.classList.add('open');
+                     btn.textContent = 'Sembunyikan Progress Detail';
+                   }
+                 }
+            }
+            if (target.matches('.download-coachee-report-btn')) {
+                const coacheeId = target.dataset.id;
+                downloadCoacheeDetails(coacheeId);
+            }
+        });
+        
+        const tooltip = document.getElementById('calendar-tooltip');
+        document.addEventListener('mouseover', (e) => {
+            const target = e.target.closest('#admin-upcoming-calendar .has-session');
+            if (target) {
+                const sessions = JSON.parse(target.dataset.sessions);
+                const participantNames = sessions.map(session => {
+                    const participant = state.participants.find(p => p.docId === session.coacheeId);
+                    return participant ? participant.name : 'Peserta tidak dikenal';
+                }).filter((value, index, self) => self.indexOf(value) === index);
+
+                if (participantNames.length > 0) {
+                    tooltip.innerHTML = `<span class="font-bold text-xs block mb-1 border-b border-slate-600 pb-1">Peserta Terjadwal:</span><ul class="space-y-1 mt-2">${participantNames.map(name => `<li>- ${name}</li>`).join('')}</ul>`;
+                    
+                    const rect = target.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + window.scrollX}px`;
+                    tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`; 
+                    tooltip.classList.remove('hidden');
+                }
+            }
+        });
+        document.addEventListener('mouseout', (e) => {
+            const target = e.target.closest('#admin-upcoming-calendar .has-session');
+            if (target) {
+                tooltip.classList.add('hidden');
+            }
+        });
+        
+        document.getElementById('peserta-propose-agenda').addEventListener('change', (e) => {
+             const othersInput = document.getElementById('peserta-propose-agenda-lainnya');
+             const sessionNumberDisplay = document.getElementById('session-number-display');
+             if (e.target.value === 'Lainnya') {
+                 othersInput.classList.remove('hidden'); othersInput.required = true;
+                 sessionNumberDisplay.textContent = '';
+             } else {
+                 othersInput.classList.add('hidden'); othersInput.required = false;
+                 const completedStarSessions = state.sessions.filter(s => s.coacheeId === state.currentUser.docId && s.type === 'Coaching STAR' && s.status === 'Selesai').length;
+                 sessionNumberDisplay.textContent = `Ini akan menjadi Sesi Coaching STAR Anda ke-${completedStarSessions + 1}.`;
+             }
+        });
+        
+        document.getElementById('peserta-propose-media').addEventListener('change', (e) => {
+            const locationContainer = document.getElementById('location-input-container');
+            const linkContainer = document.getElementById('link-input-container');
+            const linkInput = document.getElementById('peserta-propose-link');
+            const locationInput = document.getElementById('peserta-propose-location');
+            if (e.target.value === 'Online') {
+                linkContainer.classList.remove('hidden'); locationContainer.classList.add('hidden');
+                linkInput.required = true; locationInput.required = false;
+            } else {
+                locationContainer.classList.remove('hidden'); linkContainer.classList.add('hidden');
+                locationInput.required = true; linkInput.required = false;
+            }
+        });
+
+        document.addEventListener('submit', async (e) => {
+            if (e.target.matches('.inline-report-form')) {
+                e.preventDefault();
+                const logId = e.target.dataset.logId;
+                const itemIndex = parseInt(e.target.dataset.itemIndex);
+                const reportText = e.target.querySelector('.report-text').value;
+                const url = e.target.querySelector('.report-url').value;
+
+                const log = state.coachingLogs.find(l => l.id === logId);
+                const newActionItems = [...log.actionItems];
+                newActionItems[itemIndex].status = 'pending_approval';
+                newActionItems[itemIndex].report = reportText;
+                newActionItems[itemIndex].evidenceUrl = url;
+                newActionItems[itemIndex].completedDate = new Date().toISOString();
+                
+                await updateDoc(doc(db, coachingLogsCol.path, logId), { actionItems: newActionItems });
+                e.target.closest('.report-form').classList.add('hidden');
+            }
+        });
+        
+        function openSessionNoteModal(logToEdit = null, sessionId = null) {
+            const sessionNoteForm = document.getElementById('session-note-form');
+            const sessionNoteModal = document.getElementById('session-note-modal');
+            sessionNoteForm.reset();
+            document.getElementById('note-log-id').value = logToEdit ? logToEdit.id : '';
+            document.getElementById('note-session-id').value = logToEdit ? logToEdit.sessionId : sessionId;
+            
+            const currentSessionId = logToEdit ? logToEdit.sessionId : sessionId;
+            const session = state.sessions.find(s => s.id === currentSessionId);
+            const coachee = state.participants.find(p => p.docId === session.coacheeId);
+
+            document.getElementById('session-note-modal-info').textContent = `Peserta: ${coachee.name} | Topik: ${session.topic}`;
+            
+            const actionItemsContainer = document.getElementById('note-action-items-container');
+            actionItemsContainer.innerHTML = '';
+            
+            const addActionItem = (count, item = {}) => {
+                const newGroup = document.createElement('div');
+                newGroup.className = 'action-item-group mt-4 p-2 border rounded-md';
+                newGroup.innerHTML = `<label class="block text-sm font-medium text-slate-700">Rencana Aksi ${count}</label><input type="text" class="action-item-text mt-1 block w-full p-2 border border-slate-300 rounded-md" placeholder="Tindakan..." required value="${item.text || ''}"><label class="block text-xs font-medium text-slate-500 mt-1">Target Selesai</label><input type="date" class="action-item-date mt-1 block w-full p-2 border border-slate-300 rounded-md" required value="${item.targetDate || ''}">`;
+                actionItemsContainer.appendChild(newGroup);
+            };
+
+            if (logToEdit) { // Revisi
+                document.getElementById('session-note-modal-title').textContent = 'Revisi Catatan Sesi';
+                document.getElementById('note-modal-submit-btn').textContent = 'Kirim Revisi';
+                const form = logToEdit.form || {};
+                document.getElementById('form-clarity-agenda').value = form.clarityAgenda || ''; document.getElementById('form-clarity-outcome').value = form.clarityOutcome || '';
+                document.getElementById('form-awakening-notes').value = form.awakeningNotes || ''; document.getElementById('form-awakening-takeaways').value = form.awakeningTakeaways || '';
+                document.getElementById('form-resolution-resolution').value = form.resolutionResolution || ''; document.getElementById('form-empowerment-commitment').value = form.empowermentCommitment || '';
+                document.getElementById('form-wrapup-value').value = form.wrapupValue || ''; document.getElementById('form-wrapup-next').value = form.wrapupNext || '';
+                
+                if (logToEdit.actionItems) logToEdit.actionItems.forEach((item, index) => addActionItem(index + 1, item));
+            } else { // Baru
+                document.getElementById('session-note-modal-title').textContent = 'Catatan Pelaksanaan Sesi';
+                document.getElementById('note-modal-submit-btn').textContent = 'Kirim untuk Review';
+                addActionItem(1);
+            }
+
+            document.getElementById('add-note-action-item-btn').onclick = () => addActionItem(actionItemsContainer.querySelectorAll('.action-item-group').length + 1);
+            sessionNoteModal.classList.remove('hidden');
+        }
+        document.getElementById('note-modal-cancel-btn').addEventListener('click', () => document.getElementById('session-note-modal').classList.add('hidden'));
+        document.getElementById('note-modal-submit-btn').addEventListener('click', () => document.getElementById('session-note-form').requestSubmit());
+        document.getElementById('session-note-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const logId = document.getElementById('note-log-id').value;
+            const sessionId = document.getElementById('note-session-id').value;
+            const session = state.sessions.find(s => s.id === sessionId);
+            const coachee = state.participants.find(p => p.docId === session.coacheeId);
+            const actionItems = [];
+            document.querySelectorAll('#note-action-items-container .action-item-group').forEach(group => {
+                const text = group.querySelector('.action-item-text').value;
+                const targetDate = group.querySelector('.action-item-date').value;
+                if (text && targetDate) actionItems.push({ text, targetDate, status: 'open', report: '', completedDate: null, evidenceUrl: '' });
+            });
+            const formData = {
+                clarityAgenda: document.getElementById('form-clarity-agenda').value, clarityOutcome: document.getElementById('form-clarity-outcome').value,
+                awakeningNotes: document.getElementById('form-awakening-notes').value, awakeningTakeaways: document.getElementById('form-awakening-takeaways').value,
+                resolutionResolution: document.getElementById('form-resolution-resolution').value, empowermentCommitment: document.getElementById('form-empowerment-commitment').value,
+                wrapupProgress: null, wrapupValue: document.getElementById('form-wrapup-value').value, wrapupNext: document.getElementById('form-wrapup-next').value,
+            };
+
+            if (logId) { // Revisi
+                await updateDoc(doc(db, coachingLogsCol.path, logId), { actionItems, form: formData, planStatus: 'pending_coach_approval' });
+            } else { // Baru
+                const logData = { sessionId, coacheeId: session.coacheeId, coach: coachee.coach, topic: session.topic, date: session.date, actionItems, form: formData, createdAt: new Date().toISOString(), planStatus: 'pending_coach_approval' };
+                await addDoc(coachingLogsCol, logData);
+                await updateDoc(doc(db, sessionsCol.path, sessionId), { status: 'Selesai' });
+            }
+            document.getElementById('session-note-modal').classList.add('hidden');
+        });
+
+        function openCoachReviewModal(logId) {
+            const coachReviewModal = document.getElementById('coach-review-modal');
+            const log = state.coachingLogs.find(l => l.id === logId);
+            if (!log) return;
+            const coachee = state.participants.find(p => p.docId === log.coacheeId);
+
+            document.getElementById('review-log-id').value = logId;
+            document.getElementById('coach-review-modal-info').textContent = `Peserta: ${coachee.name} | Topik: ${log.topic}`;
+
+            const form = log.form || {};
+            document.getElementById('review-form-clarity-agenda').value = form.clarityAgenda || ''; document.getElementById('review-form-clarity-outcome').value = form.clarityOutcome || '';
+            document.getElementById('review-form-awakening-notes').value = form.awakeningNotes || ''; document.getElementById('review-form-awakening-takeaways').value = form.awakeningTakeaways || '';
+            document.getElementById('review-form-resolution-resolution').value = form.resolutionResolution || ''; document.getElementById('review-form-empowerment-commitment').value = form.empowermentCommitment || '';
+            document.getElementById('review-form-wrapup-progress').value = form.wrapupProgress || ''; document.getElementById('review-form-wrapup-value').value = form.wrapupValue || '';
+            document.getElementById('review-form-wrapup-next').value = form.wrapupNext || '';
+            
+            coachReviewModal.classList.remove('hidden');
+        }
+
+        async function handleReviewSubmission(approve) {
+            const coachReviewModal = document.getElementById('coach-review-modal');
+            const logId = document.getElementById('review-log-id').value;
+            const planStatus = approve ? 'approved' : 'rejected';
+            
+            const originalLog = state.coachingLogs.find(l => l.id === logId);
+            const updatedForm = {...originalLog.form};
+            
+            updatedForm.wrapupNext = document.getElementById('review-form-wrapup-next').value;
+            updatedForm.wrapupProgress = document.getElementById('review-form-wrapup-progress').value;
+
+            if (approve && !updatedForm.wrapupProgress.trim()) {
+                showConfirmation('Peringatan', 'Feedback Coach/Mentor wajib diisi sebelum menyetujui rencana aksi.', null, true, false);
+                return;
+            }
+
+            await updateDoc(doc(db, coachingLogsCol.path, logId), { planStatus: planStatus, form: updatedForm });
+            coachReviewModal.classList.add('hidden');
+        }
+
+        document.getElementById('review-modal-cancel-btn').addEventListener('click', () => document.getElementById('coach-review-modal').classList.add('hidden'));
+        document.getElementById('review-modal-approve-btn').addEventListener('click', () => handleReviewSubmission(true));
+        document.getElementById('review-modal-reject-btn').addEventListener('click', () => handleReviewSubmission(false));
+
+        function openSessionDetailsModal(logId) {
+            const sessionDetailsModal = document.getElementById('session-details-modal');
+            const log = state.coachingLogs.find(l => l.id === logId);
+            if (!log) return;
+            const coachee = state.participants.find(p => p.docId === log.coacheeId);
+            
+            document.getElementById('session-details-modal-info').textContent = `Peserta: ${coachee.name} | Topik: ${log.topic}`;
+            const form = log.form || {};
+            
+            document.getElementById('details-clarity-agenda').value = form.clarityAgenda || ''; document.getElementById('details-clarity-outcome').value = form.clarityOutcome || '';
+            document.getElementById('details-awakening-notes').value = form.awakeningNotes || ''; document.getElementById('details-awakening-takeaways').value = form.awakeningTakeaways || '';
+            document.getElementById('details-resolution-resolution').value = form.resolutionResolution || ''; document.getElementById('details-empowerment-commitment').value = form.empowermentCommitment || '';
+            document.getElementById('details-wrapup-value').value = form.wrapupValue || ''; document.getElementById('details-wrapup-progress').value = form.wrapupProgress || '';
+            document.getElementById('details-wrapup-next').value = form.wrapupNext || '';
+            
+            document.getElementById('download-detail-txt-btn').dataset.logId = logId;
+
+            sessionDetailsModal.classList.remove('hidden');
+        }
+        document.getElementById('session-details-close-btn').addEventListener('click', () => document.getElementById('session-details-modal').classList.add('hidden'));
+
+        function openEditModal(sessionId) {
+            const editModal = document.getElementById('edit-session-modal');
+            const session = state.sessions.find(s => s.id === sessionId); if (!session) return;
+            document.getElementById('edit-modal-session-id').value = sessionId;
+            document.getElementById('edit-modal-date').value = session.date;
+            document.getElementById('edit-modal-topic').value = session.topic;
+            editModal.classList.remove('hidden');
+        }
+        document.getElementById('edit-modal-cancel-btn').addEventListener('click', () => document.getElementById('edit-session-modal').classList.add('hidden'));
+        document.getElementById('edit-modal-submit-btn').addEventListener('click', () => document.getElementById('edit-session-form').requestSubmit());
+        document.getElementById('edit-session-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const sessionId = document.getElementById('edit-modal-session-id').value;
+            const newDate = document.getElementById('edit-modal-date').value;
+            const newTopic = document.getElementById('edit-modal-topic').value;
+            await updateDoc(doc(db, sessionsCol.path, sessionId), { date: newDate, topic: newTopic });
+            document.getElementById('edit-session-modal').classList.add('hidden');
+        });
+
+        const confirmModal = document.getElementById('confirmation-modal');
+        let confirmCallback = null;
+        function showConfirmation(title, message, callback, isInfoOnly = false, isSuccess = false) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            const okBtn = document.getElementById('confirm-ok-btn');
+            const cancelBtn = document.getElementById('confirm-cancel-btn');
+            
+            okBtn.className = 'text-white px-6 py-2 rounded-lg font-semibold';
+            if (isInfoOnly) {
+                okBtn.textContent = 'OK'; cancelBtn.classList.add('hidden');
+                if (isSuccess) okBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                else okBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            } else {
+                okBtn.textContent = 'Yakin'; cancelBtn.classList.remove('hidden');
+                okBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+            }
+            confirmCallback = callback;
+            confirmModal.classList.remove('hidden');
+        }
+        document.getElementById('confirm-cancel-btn').addEventListener('click', () => confirmModal.classList.add('hidden'));
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            if (confirmCallback) confirmCallback();
+            confirmModal.classList.add('hidden');
+        });
+        
+        const sanitizeForCsv = (str) => {
+            if (str === null || str === undefined) return '""';
+            let result = String(str);
+            result = result.replace(/"/g, '""');
+            if (result.search(/("|,|\n)/g) >= 0) {
+                result = `"${result}"`;
+            }
+            return result;
+        };
+        
+        function downloadCoacheeDetails(coacheeId) {
+             const coachee = state.participants.find(p => p.docId === coacheeId);
+             const logs = state.coachingLogs.filter(log => log.coacheeId === coacheeId)
+                 .sort((a, b) => new Date(a.date) - new Date(b.date));
+             
+             if (logs.length === 0) {
+                 showConfirmation('Peringatan', 'Tidak ada data sesi untuk peserta ini.', null, true, false);
+                 return;
+             }
+
+             let csvContent = "";
+             const headers = ["Sesi Ke", "Tanggal", "Agenda", "Outcome", "Exploration Notes", "Key Takeaways", "The Resolution", "Accountability & Commitment", "Value of Session", "Feedback Coach/Mentor", "Jadwal Sesi Berikutnya", "Action Items Approved", "Action Items Outstanding"];
+             csvContent += headers.map(sanitizeForCsv).join(",") + "\r\n";
+
+             logs.forEach((log, index) => {
+                 const form = log.form || {};
+                 const approvedItems = log.actionItems.filter(item => item.status === 'approved').map(item => `- ${item.text}`).join('\n');
+                 const outstandingItems = log.actionItems.filter(item => item.status !== 'approved').map(item => `- ${item.text}`).join('\n');
+                 const row = [
+                     index + 1, log.date, form.clarityAgenda || '', form.clarityOutcome || '',
+                     form.awakeningNotes || '', form.awakeningTakeaways || '', form.resolutionResolution || '',
+                     form.empowermentCommitment || '', form.wrapupValue || '', form.wrapupProgress || '',
+                     form.wrapupNext || '', approvedItems, outstandingItems
+                 ];
+                 csvContent += row.map(sanitizeForCsv).join(",") + "\r\n";
+             });
+             
+             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+             const link = document.createElement("a");
+             const url = URL.createObjectURL(blob);
+             link.setAttribute("href", url);
+             link.setAttribute("download", `rekap_detail_coaching_${coachee.name.replace(/\s/g, '_')}.csv`);
+             document.body.appendChild(link);
+             link.click();
+             document.body.removeChild(link);
+        }
+
+        document.getElementById('export-data-btn').addEventListener('click', () => {
+            let csvContent = "";
+            const headers = ["Peserta", "NIK", "Coach", "Jumlah Sesi Selesai"];
+            for (let i = 1; i <= 6; i++) {
+                headers.push(`Sesi ${i} Tanggal`, `Sesi ${i} Topik`, `Sesi ${i} Status Rencana`, `Sesi ${i} Action Item Selesai`, `Sesi ${i} Action Item Belum Selesai`);
+            }
+            csvContent += headers.map(sanitizeForCsv).join(",") + "\r\n";
+
+            state.participants.forEach(p => {
+                const participantLogs = state.coachingLogs
+                    .filter(log => log.coacheeId === p.docId)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                const completedCount = participantLogs.length;
+                
+                const rowData = [
+                    p.name, p.password, p.coach, completedCount
+                ];
+
+                for (let i = 0; i < 6; i++) {
+                    const log = participantLogs[i];
+                    if (log) {
+                        const doneItems = log.actionItems.filter(item => item.status === 'approved').length;
+                        const outstandingItems = log.actionItems.filter(item => item.status !== 'approved').map(item => item.text).join('; ');
+                        rowData.push(
+                            new Date(log.date + 'T00:00:00').toLocaleDateString('id-ID'),
+                            log.topic,
+                            log.planStatus,
+                            `${doneItems}/${log.actionItems.length}`,
+                            outstandingItems
+                        );
+                    } else {
+                        rowData.push("", "", "", "", "");
+                    }
+                }
+                csvContent += rowData.map(sanitizeForCsv).join(",") + "\r\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `rekap_coaching_star_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+        
+        document.getElementById('download-detail-txt-btn').addEventListener('click', (e) => {
+            const logId = e.target.dataset.logId;
+            const log = state.coachingLogs.find(l => l.id === logId);
+            const coachee = state.participants.find(p => p.docId === log.coacheeId);
+            if (!log || !coachee) return;
+
+            let content = `DETAIL SESI COACHING\n=======================\n`;
+            content += `Peserta: ${coachee.name}\nCoach: ${log.coach}\nTanggal: ${new Date(log.date + 'T00:00:00').toLocaleDateString('id-ID')}\nTopik: ${log.topic}\n\n`;
+            const form = log.form || {};
+            content += `C - CLARITY\n-----------------------\nAgenda: ${form.clarityAgenda || '-'}\nOutcome: ${form.clarityOutcome || '-'}\n\n`;
+            content += `A - AWAKENING\n-----------------------\nExploration Notes: ${form.awakeningNotes || '-'}\nKey Takeaways: ${form.awakeningTakeaways || '-'}\n\n`;
+            content += `R - RESOLUTION\n-----------------------\nThe Resolution: ${form.resolutionResolution || '-'}\n\n`;
+            content += `E - EMPOWERMENT\n-----------------------\nAccountability & Commitment: ${form.empowermentCommitment || '-'}\n\n`;
+            content += `SESSION WRAP-UP\n-----------------------\nValue of Session: ${form.wrapupValue || '-'}\nFeedback Coach/Mentor: ${form.wrapupProgress || '-'}\nJadwal Sesi Berikutnya: ${form.wrapupNext || '-'}\n\n`;
+
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `detail_sesi_${coachee.name.replace(/\s/g, '_')}_${log.date}.txt`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        function checkSavedLogin() {
+            const savedUser = localStorage.getItem('coachingHubUser');
+            if (savedUser && state.isDataReady) {
+                const { id: savedId, role: savedRole } = JSON.parse(savedUser);
+                let user;
+                if (savedRole === 'admin') user = { name: 'Admin', password: savedId };
+                else if (savedRole === 'coach') user = { name: mentorNikMap[savedId], password: savedId };
+                else user = state.participants.find(p => p.password === savedId);
+
+                if (user) {
+                    state.currentUser = user; 
+                    state.userRole = savedRole;
+                    switchView(savedRole);
+                    renderViews();
+                }
+            }
+            if(state.isDataReady) {
+               showLoginScreen();
+            }
+        }
+        
+        function renderAdminCalendar(container, month, year) {
+            container.innerHTML = '';
+
+            const sessionsByDate = state.sessions.reduce((acc, session) => {
+                const date = session.date;
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(session);
+                return acc;
+            }, {});
+
+            const date = new Date(year, month);
+            const monthName = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+            
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-center mb-2';
+            header.innerHTML = `<button data-role="admin" data-action="prev" class="calendar-nav p-1 rounded-full hover:bg-slate-200 transition-colors">
+                <span class="text-xl">‹</span>
+            </button>
+            <span class="font-semibold text-center text-slate-800">${monthName}</span>
+            <button data-role="admin" data-action="next" class="calendar-nav p-1 rounded-full hover:bg-slate-200 transition-colors">
+                <span class="text-xl">›</span>
+            </button>`;
+            container.appendChild(header);
+
+            const grid = document.createElement('div');
+            grid.className = 'calendar-grid';
+            ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].forEach(day => {
+                const dayEl = document.createElement('div'); dayEl.className = 'calendar-day header'; dayEl.textContent = day; grid.appendChild(dayEl);
+            });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date(); today.setHours(0,0,0,0);
+            
+            for (let i = 0; i < firstDay; i++) { 
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day other-month';
+                grid.appendChild(emptyCell); 
+            }
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dayEl = document.createElement('div');
+                const currentDate = new Date(year, month, i);
+                const dateString = toYYYYMMDD(currentDate);
+                dayEl.className = 'calendar-day';
+                dayEl.textContent = i;
+                
+                if (sessionsByDate[dateString]) {
+                    dayEl.classList.add('has-session');
+                    dayEl.dataset.sessions = JSON.stringify(sessionsByDate[dateString]);
+                }
+
+                if (currentDate.getTime() === today.getTime()) {
+                    dayEl.classList.add('today');
+                }
+                grid.appendChild(dayEl);
+            }
+            container.appendChild(grid);
+        }
+
+        // --- Inisialisasi Aplikasi ---
+        main();
+    </script>
+</body>
+</html>
+
