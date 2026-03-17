@@ -509,13 +509,13 @@
                         console.log("Participants collection is empty. Seeding initial data...");
                         loadingText.textContent = "Menyiapkan data awal untuk pertama kali...";
                         const initialParticipantsData = [
-                            { name: 'COACHEE 1', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0009308' }, { name: 'NUNUNG SUPRIADY', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0008621' },
-                            { name: 'COACHEE 2', coach: 'RAY FANDI', password: 'BCP0009188' }, { name: 'URBANUS MASYUR', coach: 'INDRA PRIMA LUKITO', password: 'BCP0009504' },
-                            { name: 'COACHEE 3', coach: 'DEBBY YUGIANDI PERMANA', password: 'BCP0009280' }, { name: 'YOSEP ANGGARIAWAN', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0008632' },
-                            { name: 'COACHEE 4', coach: 'I PUTU EKA RIZKY SAPUTRA', password: 'BCP0009404' }, { name: 'ILHAM S', coach: 'SUFARMAN MUH ALI', password: 'BCP0009653' },
-                            { name: 'COACHEE 5', coach: 'RAY FANDI', password: 'BCP0009588' }, { name: 'MUKAMAT RIYONO MUBAROCHMAN', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0009586' },
-                            { name: 'COACHEE 6', coach: 'WAWAN SETYAWAN', password: '20120501DA' }, { name: 'TRIO AFRIYONO', coach: 'NASDIN SJAMSUDDIN', password: '2022040834' },
-                            { name: 'COACHEE 7', coach: 'ARIF FAKIH, S.T.', password: '2020120548' }
+                            { name: 'COACHEE 1', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0009308' }, { name: 'COACHEE 2', coach: 'HADI EKO SUSENO & TRI PRAYITNO', password: 'BCP0008621' },
+                            { name: 'COACHEE 3', coach: 'RAY FANDI', password: 'BCP0009188' }, { name: 'COACHEE 4', coach: 'INDRA PRIMA LUKITO', password: 'BCP0009504' },
+                            { name: 'COACHEE 5', coach: 'DEBBY YUGIANDI PERMANA', password: 'BCP0009280' }, { name: 'COACHEE 6', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0008632' },
+                            { name: 'COACHEE 7', coach: 'I PUTU EKA RIZKY SAPUTRA', password: 'BCP0009404' }, { name: 'COACHEE 8', coach: 'SUFARMAN MUH ALI', password: 'BCP0009653' },
+                            { name: 'COACHEE 9', coach: 'RAY FANDI', password: 'BCP0009588' }, { name: 'COACHEE 10', coach: 'NASDIN SJAMSUDDIN', password: 'BCP0009586' },
+                            { name: 'COACHEE 11', coach: 'WAWAN SETYAWAN', password: '20120501DA' }, { name: 'COACHEE 12', coach: 'NASDIN SJAMSUDDIN', password: '2022040834' },
+                            { name: 'COACHEE 13', coach: 'ARIF FAKIH, S.T.', password: '2020120548' }
                         ];
                         const batch = writeBatch(db);
                         initialParticipantsData.forEach(p => { 
